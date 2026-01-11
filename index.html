@@ -2,24 +2,213 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Feedback Form</title>
-    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff Attendance Pro - Global Edition</title>
+    <style>
+        :root {
+            --primary: #10b981;
+            --primary-hover: #059669;
+            --bg: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --danger: #ef4444;
+        }
+
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text-main); margin: 0; padding: 40px 20px; }
+        .container { max-width: 1000px; margin: auto; background: var(--card-bg); padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        
+        header { border-bottom: 2px solid #f0f0f0; margin-bottom: 20px; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        h2 { margin: 0; color: var(--primary); font-size: 24px; }
+
+        .summary-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px; }
+        .summary-card { padding: 15px; border-radius: 12px; text-align: center; color: white; font-weight: bold; }
+        .total-card { background: var(--text-main); }
+        .present-card { background: var(--primary); }
+        .absent-card { background: var(--danger); }
+        .summary-card span { display: block; font-size: 24px; margin-top: 5px; }
+
+        /* Form Group updated for 3 fields + button */
+        .form-group { 
+            display: grid; 
+            grid-template-columns: 1.5fr 1.5fr 1fr auto; 
+            gap: 12px; 
+            margin-bottom: 25px; 
+            background: #f9fafb; 
+            padding: 20px; 
+            border-radius: 12px; 
+        }
+
+        .search-container { margin-bottom: 20px; }
+        .search-input { width: 100%; padding: 12px 15px; border: 2px solid #e5e7eb; border-radius: 8px; box-sizing: border-box; }
+
+        input, select { padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; outline: none; font-size: 14px; }
+        button { cursor: pointer; padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; }
+
+        .btn-add { background: var(--primary); color: white; }
+        .btn-download { background: var(--text-main); color: white; width: 100%; margin-top: 30px; padding: 15px; font-size: 16px; }
+        .btn-delete { background: #fee2e2; color: var(--danger); padding: 5px 10px; font-size: 12px; }
+        .btn-clear { background: #6b7280; color: white; font-size: 12px; margin-left: 10px; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 15px; color: var(--text-muted); font-size: 12px; text-transform: uppercase; border-bottom: 2px solid #f3f4f6; }
+        td { padding: 15px; border-bottom: 1px solid #f3f4f6; font-size: 14px; }
+
+        .status-pill { padding: 8px; border-radius: 6px; background: #fff; border: 1px solid #d1d5db; width: 100%; }
+        .country-tag { background: #eff6ff; color: #1e40af; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+    </style>
 </head>
 <body>
 
-    <div class="container">
-        <h2 class="title">how was your experience<br>with the product</h2>
+<div class="container">
+    <header>
+        <div>
+            <h2>Staff Attendance Pro</h2>
+            <button class="btn-clear" onclick="clearAllStaff()">Clear All Staff</button>
+        </div>
+        <input type="date" id="attendanceDate">
+    </header>
 
-        <form id="feedbackForm">
-            <input type="text" id="name" placeholder="Your Name" required>
-            <input type="email" id="email" placeholder="Your Email" required>
-            <textarea id="feedback" placeholder="Your Feedback" required></textarea>
-            <button type="submit">Submit</button>
-        </form>
-
-        <p id="message"></p>
+    <div class="summary-row">
+        <div class="summary-card total-card">Total Staff <span id="totalCount">0</span></div>
+        <div class="summary-card present-card">Present <span id="presentCount">0</span></div>
+        <div class="summary-card absent-card">Absent <span id="absentCount">0</span></div>
     </div>
 
-    <script src="script.js"></script>
+    <div class="form-group">
+        <input type="text" id="newName" placeholder="Full Name">
+        <input type="text" id="newPhone" placeholder="Phone Number">
+        <select id="newCountry">
+            <option value="">Country</option>
+            <option value="USA">USA</option>
+            <option value="UK">UK</option>
+            <option value="India">India</option>
+            <option value="Canada">Canada</option>
+            <option value="Australia">Australia</option>
+            <option value="Other">Other</option>
+        </select>
+        <button class="btn-add" onclick="addMember()">Add Staff</button>
+    </div>
+
+    <div class="search-container">
+        <input type="text" id="searchInput" class="search-input" placeholder="🔍 Search name, phone, or country..." onkeyup="filterTable()">
+    </div>
+
+    <table id="staffTable">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Country</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="staffBody"></tbody>
+    </table>
+
+    <button class="btn-download" onclick="exportToCSV()">Generate Report (.CSV)</button>
+</div>
+
+<script>
+    let staffData = JSON.parse(localStorage.getItem('myStaffList')) || [];
+    document.getElementById('attendanceDate').valueAsDate = new Date();
+
+    function updateSummary() {
+        const statuses = document.querySelectorAll('.status-pill');
+        let present = 0, absent = 0;
+        statuses.forEach(s => s.value === "Present" ? present++ : absent++);
+        document.getElementById('totalCount').innerText = staffData.length;
+        document.getElementById('presentCount').innerText = present;
+        document.getElementById('absentCount').innerText = absent;
+    }
+
+    function renderTable(dataToRender = staffData) {
+        const staffBody = document.getElementById('staffBody');
+        staffBody.innerHTML = "";
+        
+        dataToRender.forEach((staff, index) => {
+            const originalIndex = staffData.findIndex(s => s.name === staff.name && s.phone === staff.phone);
+            let row = document.createElement('tr');
+            row.innerHTML = `
+                <td><strong>${staff.name}</strong></td>
+                <td>${staff.phone}</td>
+                <td><span class="country-tag">${staff.country || 'N/A'}</span></td>
+                <td>
+                    <select class="status-pill" onchange="updateSummary()">
+                        <option value="Present">✅ Present</option>
+                        <option value="Absent">❌ Absent</option>
+                    </select>
+                </td>
+                <td><button class="btn-delete" onclick="deleteMember(${originalIndex})">Remove</button></td>
+            `;
+            staffBody.appendChild(row);
+        });
+        localStorage.setItem('myStaffList', JSON.stringify(staffData));
+        updateSummary();
+    }
+
+    function addMember() {
+        const name = document.getElementById('newName');
+        const phone = document.getElementById('newPhone');
+        const country = document.getElementById('newCountry');
+
+        if (name.value && phone.value && country.value) {
+            staffData.push({ name: name.value, phone: phone.value, country: country.value });
+            name.value = ""; phone.value = ""; country.value = "";
+            renderTable();
+        } else {
+            alert("Please fill name, phone, AND country!");
+        }
+    }
+
+    function filterTable() {
+        const term = document.getElementById('searchInput').value.toLowerCase();
+        const filtered = staffData.filter(s => 
+            s.name.toLowerCase().includes(term) || 
+            s.phone.includes(term) || 
+            (s.country && s.country.toLowerCase().includes(term))
+        );
+        renderTable(filtered);
+    }
+
+    function deleteMember(index) {
+        if(confirm("Remove this staff member?")) {
+            staffData.splice(index, 1);
+            renderTable();
+        }
+    }
+
+    function clearAllStaff() {
+        if(confirm("This will delete your entire list. Proceed?")) {
+            staffData = [];
+            renderTable();
+        }
+    }
+
+    function exportToCSV() {
+        const date = document.getElementById('attendanceDate').value;
+        const rows = document.getElementById('staffBody').querySelectorAll('tr');
+        let csvContent = "Date,Name,Phone,Country,Status\n";
+        
+        rows.forEach(row => {
+            const name = row.cells[0].innerText;
+            const phone = row.cells[1].innerText;
+            const country = row.cells[2].innerText;
+            const status = row.querySelector('.status-pill').value;
+            csvContent += `${date},"${name}","${phone}","${country}",${status}\n`;
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.setAttribute('href', url);
+        a.setAttribute('download', `Attendance_${date}.csv`);
+        a.click();
+    }
+
+    renderTable();
+</script>
+
 </body>
 </html>
